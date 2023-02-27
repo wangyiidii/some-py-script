@@ -258,7 +258,7 @@ if __name__ == '__main__':
         except Exception as e:
             single_msg += f'异常: {e}'
         logging.info(single_msg)
-        msg += '\n\n'
+        msg += single_msg + '\n\n'
         index += 1
 
         send('茅台抢购结果', msg)
