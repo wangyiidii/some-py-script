@@ -31,7 +31,7 @@ def load_send() -> None:
     send = None
     cur_path = os.path.abspath(os.path.dirname(__file__))
     sys.path.append(cur_path)
-    if os.path.exists(cur_path + "/../notify.py"):
+    if os.path.exists(cur_path + "/notify.py"):
         try:
             from notify import send
         except Exception:
@@ -72,7 +72,10 @@ def mt_add(item_id, shop_id, session_id, user_id, token, device_id):
         'MT-Lng': '', 'MT-Info': '028e7f96f6369cafe1d105579c5b9377', 'MT-APP-Version': Version,
         'MT-Request-ID': f'{int(time.time() * 1000)}', 'Accept-Language': 'zh-Hans-CN;q=1',
         'MT-Device-ID': device_id, 'MT-V': r.text,
-        'MT-Bundle-ID': 'com.moutai.mall'
+        'MT-Bundle-ID': 'com.moutai.mall',
+        'mt-lng': lng,
+        'mt-lat': lat
+
     }
     d = {"itemInfoList": [{"count": 1, "itemId": str(item_id)}], "sessionId": session_id, "userId": str(user_id),
          "shopId": str(shop_id)}
@@ -101,6 +104,8 @@ def get_session_id(device_id, token):
         'mt-app-version': '3.2.16',
         'user-agent': 'iPhone 14',
         'mt-r': mt_r,
+        'mt-lng': lng,
+        'mt-lat': lat
     }
 
     response = requests.get('https://static.moutai519.com.cn/mt-backend/xhr/front/mall/index/session/get/' + time_keys,
@@ -126,6 +131,8 @@ def get_shop_item(session_id, item_id, device_id, token, province, city):
         'mt-app-version': '3.2.16',
         'user-agent': 'iPhone 14',
         'mt-lng': '',
+        'mt-lng': lng,
+        'mt-lat': lat
     }
 
     response = requests.get(
@@ -155,6 +162,8 @@ def get_user_id(token, Device_ID):
         'User-Agent': 'iOS;16.0.1;Apple;iPhone 14 ProMax',
         'MT-R': mt_r,
         'MT-Device-ID': Device_ID,
+        'mt-lng': lng,
+        'mt-lat': lat
     }
 
     response = requests.get('https://app.moutai519.com.cn/xhr/front/user/info', headers=headers)
@@ -183,6 +192,8 @@ def getUserEnergyAward(device_id, ck):
         'Accept-Language': 'zh-CN,zh-Hans;q=0.9',
         'MT-Device-ID': device_id,
         'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'mt-lng': lng,
+        'mt-lat': lat
     }
     response = requests.post('https://h5.moutai519.com.cn/game/isolationPage/getUserEnergyAward', cookies=cookies,
                              headers=headers, json={})
@@ -200,6 +211,8 @@ def get_map():
         'Accept-Language': 'zh-CN,zh-Hans;q=0.9',
         'MT-Device-ID': f'{int(time.time() * 1000)}{random.randint(1111111, 999999999)}{int(time.time() * 1000)}',
         'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'mt-lng': lng,
+        'mt-lat': lat
     }
     res = requests.get(url, headers=headers)
     mtshops = res.json().get('data', {}).get('mtshops_pc', {})
@@ -217,41 +230,35 @@ def get_map():
     return p_c_map
 
 
-def reserve(index, config):
-    single_msg = f'===== 第{index}个账号 =====\n'
-    if not config:
-        return single_msg
-    province, city, device_id, token, ck = config.split(',')
-    try:
-        session_id, item_codes = get_session_id(device_id, token)
-        user_name, user_id, mobile = get_user_id(token, device_id)
-        for item_code in item_codes:
-            name = res_map.get(str(item_code))
-            shop_id = get_shop_item(session_id, item_code, device_id, token, province, city)
-            res = mt_add(item_code, str(shop_id), session_id, user_id, token, device_id)
-            single_msg += f'{user_name}({mobile}) {name} 抢购结果: {res}\n'
-        r = getUserEnergyAward(device_id, ck)
-        single_msg += f'{user_name}({mobile} 耐力: {r}\n'
-    except Exception as e:
-        single_msg += f'异常: {e}'
-    logging.info(single_msg)
-    return single_msg
-
-
 if __name__ == '__main__':
     # 加载通知
     load_send()
-
-    get_map()
-    time_keys = str(int(time.mktime(datetime.date.today().timetuple())) * 1000)
 
     # 抢购
     maotai_configs = get_envs(env_key)
     msg = ''
     index = 1
     for config in maotai_configs.split("&"):
-        msg += reserve(index, config)
+        single_msg = f'===== 第{index}个账号 =====\n'
+        if not config:
+            continue
+        province, city, lng, lat, device_id, token, ck = config.split(',')
+        time_keys = str(int(time.mktime(datetime.date.today().timetuple())) * 1000)
+        try:
+            get_map()
+            session_id, item_codes = get_session_id(device_id, token)
+            user_name, user_id, mobile = get_user_id(token, device_id)
+            for item_code in item_codes:
+                name = res_map.get(str(item_code))
+                shop_id = get_shop_item(session_id, item_code, device_id, token, province, city)
+                res = mt_add(item_code, str(shop_id), session_id, user_id, token, device_id)
+                single_msg += f'{user_name}({mobile}) {name} 抢购结果: {res}\n'
+            r = getUserEnergyAward(device_id, ck)
+            single_msg += f'{user_name}({mobile} 耐力: {r}\n'
+        except Exception as e:
+            single_msg += f'异常: {e}'
+        logging.info(single_msg)
         msg += '\n\n'
         index += 1
 
-    send('茅台抢购结果', msg)
+        send('茅台抢购结果', msg)
